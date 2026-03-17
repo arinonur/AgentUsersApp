@@ -43,6 +43,8 @@ jobs:
         run: |
           echo "GOOGLE_APPLICATION_CREDENTIALS=${{ steps.auth.outputs.credentials_file_path }}" >> "$GITHUB_ENV"
           echo "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE=${{ steps.auth.outputs.credentials_file_path }}" >> "$GITHUB_ENV"
+          echo "GOOGLE_CLOUD_PROJECT=${FIREBASE_PROJECT}" >> "$GITHUB_ENV"
+          echo "GCLOUD_PROJECT=${FIREBASE_PROJECT}" >> "$GITHUB_ENV"
           cat > .firebaserc <<EOF
           {
             "projects": {
@@ -74,7 +76,9 @@ jobs:
           cp .codex/config.toml "$HOME/.codex/config.toml"
 
       - name: Verify Firebase CLI project access
-        run: firebase apps:list --project "$FIREBASE_PROJECT" --json --non-interactive > /dev/null
+        run: |
+          firebase use "$FIREBASE_PROJECT" --non-interactive
+          firebase apps:list --project "$FIREBASE_PROJECT" --json --non-interactive > /dev/null
 
       - name: Create temporary directory
         run: mkdir -p .tmp

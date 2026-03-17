@@ -2,8 +2,6 @@ name: Crashlytics MCP AI Fix
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "*/30 * * * *"
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"

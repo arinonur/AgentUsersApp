@@ -20,6 +20,7 @@ jobs:
       group: crashlytics-mcp-ai-fix
       cancel-in-progress: false
     env:
+      CODEX_HOME: ${{ github.workspace }}/.codex
       GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
       GCLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
       FIREBASE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
@@ -42,6 +43,9 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Install Firebase CLI for MCP
+        run: npm install --global firebase-tools@latest
+
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
@@ -50,6 +54,11 @@ jobs:
 
       - name: Ensure Gradle wrapper is executable
         run: chmod +x ./gradlew
+
+      - name: Prepare Codex MCP config
+        run: |
+          mkdir -p "$HOME/.codex"
+          cp .codex/config.toml "$HOME/.codex/config.toml"
 
       - name: Run Codex with Firebase MCP
         uses: openai/codex-action@v1

@@ -79,6 +79,14 @@ jobs:
             echo "No safe changes were produced. No PR will be opened."
           fi
 
+      - name: Write google-services.json
+        if: steps.changes.outputs.has_changes == 'true'
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          mkdir -p app
+          printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+
       - name: Verify Android compile
         if: steps.changes.outputs.has_changes == 'true'
         run: ./gradlew :app:compileDebugKotlin

@@ -69,6 +69,15 @@ jobs:
           sandbox: workspace-write
           safety-strategy: drop-sudo
 
+      - name: Clean CI runtime artifacts
+        run: |
+          rm -f .codex/*.json
+          rm -f .codex/*.sqlite
+          rm -rf .codex/logs*
+          rm -rf .codex/sessions/
+          rm -rf .codex/skills/
+          rm -f gha-creds-*.json
+
       - name: Detect code changes
         id: changes
         run: |
@@ -96,6 +105,16 @@ jobs:
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GH_PAT }}
+          add-paths: |
+            app/**
+            core/**
+            feature/**
+            .github/**
+            docs/**
+            gradle/**
+            *.gradle.kts
+            settings.gradle.kts
+            gradle.properties
           branch: automation/crashlytics-mcp-ai-fix-${{ github.run_id }}-${{ github.run_attempt }}
           delete-branch: true
           commit-message: "chore: attempt Crashlytics MCP-guided fix"

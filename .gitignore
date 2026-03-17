@@ -17,3 +17,11 @@ local.properties
 
 # Firebase
 google-services.json
+
+# Codex / CI runtime artifacts
+.codex/*.json
+.codex/*.sqlite
+.codex/logs*
+.codex/sessions/
+.codex/skills/
+gha-creds-*.json

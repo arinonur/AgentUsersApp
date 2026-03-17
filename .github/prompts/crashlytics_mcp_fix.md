@@ -29,6 +29,11 @@ SKIP CONDITION:
 
 PROCESS:
 
+- before attempting any code change, first output a short status block covering:
+  - whether the Firebase MCP server is available
+  - whether Crashlytics MCP tools are available
+  - whether any Android Crashlytics issue was found
+  - whether any event and stack trace were found
 - use a plan-first approach before editing
 - fetch the latest Android Crashlytics issue through Firebase MCP
 - fetch at least one event and stack trace through Firebase MCP

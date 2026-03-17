@@ -74,7 +74,10 @@ jobs:
           safety-strategy: drop-sudo
 
       - name: Print Codex output
-        run: cat .tmp/codex-final-message.txt || true
+        run: |
+          if [ -f .tmp/codex-final-message.txt ]; then
+            cat .tmp/codex-final-message.txt
+          fi
 
       - name: Clean CI runtime artifacts
         run: |

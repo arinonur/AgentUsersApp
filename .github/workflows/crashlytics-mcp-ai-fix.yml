@@ -75,7 +75,6 @@ jobs:
 
       - name: Verify Firebase CLI project access
         run: |
-          firebase use "$FIREBASE_PROJECT" --non-interactive
           firebase apps:list --project "$FIREBASE_PROJECT" --json --non-interactive > /dev/null
 
       - name: Create temporary directory

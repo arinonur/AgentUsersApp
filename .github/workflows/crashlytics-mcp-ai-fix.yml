@@ -32,11 +32,24 @@ jobs:
           fetch-depth: 0
 
       - name: Authenticate to Google Cloud
+        id: auth
         uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           create_credentials_file: true
+
+      - name: Configure Firebase CLI credentials
+        run: |
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${{ steps.auth.outputs.credentials_file_path }}" >> "$GITHUB_ENV"
+          echo "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE=${{ steps.auth.outputs.credentials_file_path }}" >> "$GITHUB_ENV"
+          cat > .firebaserc <<EOF
+          {
+            "projects": {
+              "default": "${FIREBASE_PROJECT}"
+            }
+          }
+          EOF
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -59,6 +72,9 @@ jobs:
         run: |
           mkdir -p "$HOME/.codex"
           cp .codex/config.toml "$HOME/.codex/config.toml"
+
+      - name: Verify Firebase CLI project access
+        run: firebase apps:list --project "$FIREBASE_PROJECT" --json --non-interactive > /dev/null
 
       - name: Create temporary directory
         run: mkdir -p .tmp
@@ -86,6 +102,7 @@ jobs:
           rm -rf .codex/logs*
           rm -rf .codex/sessions/
           rm -rf .codex/skills/
+          rm -f .firebaserc
           rm -f gha-creds-*.json
 
       - name: Detect code changes

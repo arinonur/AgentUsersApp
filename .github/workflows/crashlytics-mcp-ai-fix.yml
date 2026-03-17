@@ -107,8 +107,6 @@ jobs:
           token: ${{ secrets.GH_PAT }}
           add-paths: |
             app/**
-            core/**
-            feature/**
             .github/**
             docs/**
             gradle/**

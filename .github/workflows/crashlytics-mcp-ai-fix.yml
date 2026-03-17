@@ -60,12 +60,16 @@ jobs:
           mkdir -p "$HOME/.codex"
           cp .codex/config.toml "$HOME/.codex/config.toml"
 
+      - name: Create temporary directory
+        run: mkdir -p .tmp
+
       - name: Run Codex with Firebase MCP
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           prompt-file: .github/prompts/crashlytics_mcp_fix.md
           working-directory: .
+          output-file: .tmp/codex-final-message.txt
           sandbox: workspace-write
           safety-strategy: drop-sudo
 

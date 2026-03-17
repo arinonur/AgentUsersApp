@@ -95,6 +95,7 @@ jobs:
         if: steps.changes.outputs.has_changes == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
+          token: ${{ secrets.GH_PAT }}
           branch: automation/crashlytics-mcp-ai-fix-${{ github.run_id }}-${{ github.run_attempt }}
           delete-branch: true
           commit-message: "chore: attempt Crashlytics MCP-guided fix"

@@ -15,8 +15,7 @@ class MainActivity : ComponentActivity() {
             AgentUsersAppTheme {
                 AuthNavGraph()
             }
-            val text: String? = null
-            println(text!!.length)
+
         }
     }
 }

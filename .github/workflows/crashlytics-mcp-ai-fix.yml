@@ -69,6 +69,9 @@ jobs:
           sandbox: workspace-write
           safety-strategy: drop-sudo
 
+      - name: Print Codex output
+        run: cat .tmp/codex-final-message.txt || true
+
       - name: Clean CI runtime artifacts
         run: |
           rm -f .codex/*.json

@@ -1,0 +1,159 @@
+name: Crashlytics BigQuery AI Fix
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  crashlytics-bigquery-ai-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: crashlytics-bigquery-ai-fix
+      cancel-in-progress: false
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      BQ_CRASH_TABLE: ${{ secrets.BQ_CRASH_TABLE }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          create_credentials_file: true
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Query latest Crashlytics crashes from BigQuery
+        shell: bash
+        run: |
+          mkdir -p .tmp
+          TABLE="${BQ_CRASH_TABLE:-task-management-android-2b0ab.firebase_crashlytics.com_example_AgentUsersApp_ANDROID}"
+          bq query \
+            --project_id="${GCP_PROJECT_ID}" \
+            --use_legacy_sql=false \
+            --format=json \
+            "SELECT * FROM \
+            \`${TABLE}\` \
+            ORDER BY event_timestamp DESC \
+            LIMIT 10" > .tmp/crashes.json
+
+      - name: Build Codex prompt with crash JSON
+        shell: bash
+        run: |
+          cat > .tmp/codex-prompt.md <<'PROMPT'
+          Read `.tmp/crashes.json` first, then inspect only the relevant Android/Kotlin code needed to address the latest crashes.
+
+          Your task:
+          - make the smallest safe fix that plausibly addresses the crash data
+          - preserve the existing app architecture, navigation, MVVM structure, and design patterns
+          - avoid unrelated rewrites, broad refactors, dependency churn, or formatting-only changes
+          - do not modify secrets, workflow authentication, release signing, CI infrastructure outside this workflow, or Firebase configuration
+          - do not change `google-services.json`
+          - if the crash cannot be fixed safely from the available evidence, make no code changes
+
+          Process requirements:
+          - use a plan-first approach before editing
+          - inspect the crash JSON and the narrowest relevant code paths
+          - prefer one focused fix over multiple speculative fixes
+          - leave the repository unchanged if there is no actionable crash or no safe minimal fix
+
+          Verification note:
+          - do not run Gradle yourself in Codex; the workflow will compile with `./gradlew :app:compileDebugKotlin`
+
+          Crash JSON:
+          ```json
+          PROMPT
+          cat .tmp/crashes.json >> .tmp/codex-prompt.md
+          cat >> .tmp/codex-prompt.md <<'PROMPT'
+          ```
+          PROMPT
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Ensure Gradle wrapper is executable
+        run: chmod +x ./gradlew
+
+      - name: Run Codex fix generation
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .tmp/codex-prompt.md
+          working-directory: .
+          output-file: .tmp/codex-final-message.txt
+          sandbox: workspace-write
+          safety-strategy: drop-sudo
+
+      - name: Clean runtime artifacts
+        shell: bash
+        run: |
+          rm -f .tmp/crashes.json .tmp/codex-prompt.md .tmp/codex-final-message.txt
+          rm -f .codex/*.json
+          rm -f .codex/*.sqlite
+          rm -rf .codex/logs*
+          rm -rf .codex/sessions/
+          rm -rf .codex/skills/
+          rm -f gha-creds-*.json
+
+      - name: Detect git changes
+        id: changes
+        shell: bash
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write google-services.json
+        if: steps.changes.outputs.has_changes == 'true'
+        shell: bash
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+
+      - name: Compile Android project
+        if: steps.changes.outputs.has_changes == 'true'
+        run: ./gradlew :app:compileDebugKotlin
+
+      - name: Create draft pull request
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GH_PAT }}
+          branch-token: ${{ secrets.GH_PAT }}
+          branch: automation/crashlytics-bigquery-ai-fix
+          delete-branch: true
+          commit-message: "chore: automated Crashlytics fix"
+          title: "Automated Crashlytics Fix"
+          body: |
+            ## Summary
+            - queried the latest Crashlytics exports from BigQuery
+            - asked Codex to produce a minimal Android fix
+            - verified the result with `./gradlew :app:compileDebugKotlin`
+
+            ## Safety
+            - this PR was created automatically as a draft
+            - no auto-merge is configured
+          draft: true

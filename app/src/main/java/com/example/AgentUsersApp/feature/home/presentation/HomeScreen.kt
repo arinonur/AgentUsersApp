@@ -32,8 +32,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.AgentUsersApp.BuildConfig
 import com.example.AgentUsersApp.ui.theme.AgentUsersAppTheme
-import kotlin.RuntimeException
 
 @Composable
 fun TaskHomeScreenRoute(
@@ -183,18 +183,23 @@ fun TaskHomeScreen(
                 }
             }
 
-            item {
-                Button(
-                    onClick = {
-                        throw RuntimeException("Temporary Crashlytics test crash")
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError,
-                    ),
-                    shape = RoundedCornerShape(14.dp),
-                ) {
-                    Text("Trigger Crashlytics Test Crash")
+            if (BuildConfig.DEBUG) {
+                item {
+                    Button(
+                        onClick = {
+                            CrashTestHelper.triggerComplexCrash(
+                                selectedTabIndex = selectedTabIndex,
+                                taskCount = uiState.inProgressTasks.size,
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError,
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        Text("Trigger Crashlytics Test Crash")
+                    }
                 }
             }
 

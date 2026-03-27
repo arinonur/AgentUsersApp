@@ -1,3 +1,14 @@
+# Added by codex-action.
+model_provider = "codex-action-responses-proxy"
+
+
 [mcp_servers.firebase]
 command = "firebase"
 args = ["mcp", "--dir", "/github/workspace", "--only", "crashlytics,core"]
+
+
+# Added by codex-action.
+[model_providers.codex-action-responses-proxy]
+name = "Codex Action Responses Proxy"
+base_url = "http://127.0.0.1:44745/v1"
+wire_api = "responses"

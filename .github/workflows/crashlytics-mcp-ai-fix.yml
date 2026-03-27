@@ -52,6 +52,13 @@ jobs:
           }
           EOF
 
+      - name: Debug Firebase auth environment
+        shell: bash
+        run: |
+          echo "Project: $FIREBASE_PROJECT"
+          test -f "${{ steps.auth.outputs.credentials_file_path }}" && echo "Credentials file exists"
+          env | grep -E 'GOOGLE_APPLICATION_CREDENTIALS|CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE|GOOGLE_CLOUD_PROJECT|GCLOUD_PROJECT' || true
+
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
@@ -78,7 +85,7 @@ jobs:
       - name: Verify Firebase project access
         shell: bash
         run: |
-          firebase apps:list --project "$FIREBASE_PROJECT" --json --non-interactive > /dev/null
+          firebase --debug apps:list --project "$FIREBASE_PROJECT" --json --non-interactive
 
       - name: Create temporary directory
         run: mkdir -p .tmp

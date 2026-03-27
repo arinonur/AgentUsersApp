@@ -37,6 +37,11 @@ jobs:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           create_credentials_file: true
 
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
       - name: Configure Firebase CLI credentials
         shell: bash
         run: |
@@ -80,15 +85,24 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$HOME/.codex"
-          cp .codex/config.toml "$HOME/.codex/config.toml"
+          cat > "$HOME/.codex/config.toml" <<EOF
+          [mcp_servers.firebase]
+          command = "firebase"
+          args = ["mcp", "--dir", "${GITHUB_WORKSPACE}", "--only", "crashlytics,core"]
+          EOF
+
+      - name: Create temporary directory
+        run: mkdir -p .tmp
 
       - name: Verify Firebase project access
         shell: bash
         run: |
-          firebase --debug apps:list --project "$FIREBASE_PROJECT" --json --non-interactive
-
-      - name: Create temporary directory
-        run: mkdir -p .tmp
+          ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            "https://firebase.googleapis.com/v1beta1/projects/${FIREBASE_PROJECT}:searchApps?pageSize=1" \
+            > .tmp/firebase-apps-check.json
+          cat .tmp/firebase-apps-check.json
 
       - name: Show Codex config
         shell: bash
@@ -127,6 +141,7 @@ jobs:
         shell: bash
         run: |
           rm -f .tmp/codex-final-message.txt
+          rm -f .tmp/firebase-apps-check.json
           rm -f .codex/*.json
           rm -f .codex/*.sqlite
           rm -rf .codex/logs*

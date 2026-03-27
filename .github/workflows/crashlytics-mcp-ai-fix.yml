@@ -90,13 +90,13 @@ jobs:
           mkdir -p "$HOME/.codex"
           cat > "$CODEX_HOME/config.toml" <<EOF
           [mcp_servers.firebase]
-          command = "firebase"
-          args = ["mcp", "--dir", "${GITHUB_WORKSPACE}", "--only", "crashlytics,core"]
+          command = "bash"
+          args = ["-lc", "firebase --token \"$FIREBASE_TOKEN\" mcp --dir \"${GITHUB_WORKSPACE}\" --only crashlytics,core"]
           EOF
           cat > "$HOME/.codex/config.toml" <<EOF
           [mcp_servers.firebase]
-          command = "firebase"
-          args = ["mcp", "--dir", "${GITHUB_WORKSPACE}", "--only", "crashlytics,core"]
+          command = "bash"
+          args = ["-lc", "firebase --token \"$FIREBASE_TOKEN\" mcp --dir \"${GITHUB_WORKSPACE}\" --only crashlytics,core"]
           EOF
 
       - name: Create temporary directory

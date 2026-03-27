@@ -22,6 +22,7 @@ jobs:
       GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
       GCLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
       FIREBASE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
     steps:
       - name: Check out repository
@@ -62,6 +63,7 @@ jobs:
         run: |
           echo "Project: $FIREBASE_PROJECT"
           test -f "${{ steps.auth.outputs.credentials_file_path }}" && echo "Credentials file exists"
+          if [ -n "$FIREBASE_TOKEN" ]; then echo "FIREBASE_TOKEN is set"; else echo "FIREBASE_TOKEN is missing"; fi
           env | grep -E 'GOOGLE_APPLICATION_CREDENTIALS|CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE|GOOGLE_CLOUD_PROJECT|GCLOUD_PROJECT' || true
 
       - name: Set up Node.js

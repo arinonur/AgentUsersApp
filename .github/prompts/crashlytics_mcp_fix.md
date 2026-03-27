@@ -23,6 +23,8 @@ Process:
 5. Leave the repository unchanged if there is no safe fix.
 
 Output expectations:
+- start the final output with a single line in this exact format:
+  `PR title: <specific draft PR title>`
 - summarize the selected Crashlytics issue
 - summarize the changed files, if any
 - summarize the safety rationale for the fix or for making no change

@@ -140,6 +140,19 @@ jobs:
           find .codex -maxdepth 2 -type f | sort || true
           find "$HOME/.codex" -maxdepth 2 -type f | sort || true
 
+      - name: Prepare pull request metadata
+        id: pr_meta
+        shell: bash
+        run: |
+          PR_TITLE="chore: draft Crashlytics MCP-guided fix"
+          if [ -f .tmp/codex-final-message.txt ]; then
+            CANDIDATE="$(sed -n 's/^PR title:[[:space:]]*//p' .tmp/codex-final-message.txt | head -n 1 | tr -d '\r')"
+            if [ -n "$CANDIDATE" ]; then
+              PR_TITLE="$CANDIDATE"
+            fi
+          fi
+          echo "title=$PR_TITLE" >> "$GITHUB_OUTPUT"
+
       - name: Print git status
         run: git status --short
 
@@ -191,7 +204,7 @@ jobs:
           branch: automation/crashlytics-mcp-ai-fix-${{ github.run_id }}-${{ github.run_attempt }}
           delete-branch: true
           commit-message: "chore: attempt Crashlytics MCP-guided fix"
-          title: "chore: draft Crashlytics MCP-guided fix"
+          title: ${{ steps.pr_meta.outputs.title }}
           body: |
             ## Summary
             - attempted the smallest safe Android/Kotlin fix for the newest actionable Crashlytics issue found via Firebase MCP

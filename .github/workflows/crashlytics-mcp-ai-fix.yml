@@ -126,8 +126,9 @@ jobs:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           prompt-file: .github/prompts/crashlytics_mcp_fix.md
           working-directory: .
+          codex-home: ${{ github.workspace }}/.codex
           output-file: .tmp/codex-final-message.txt
-          sandbox: workspace-write
+          sandbox: danger-full-access
           safety-strategy: drop-sudo
 
       - name: Print Codex output

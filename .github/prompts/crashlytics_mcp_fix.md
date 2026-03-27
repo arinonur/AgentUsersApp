@@ -1,46 +1,29 @@
-Use Firebase MCP Crashlytics tools for this task.
+Use Firebase MCP Crashlytics tools for this task. Do not use BigQuery.
 
 Use the Firebase project identified by the `FIREBASE_PROJECT` environment variable for all Firebase MCP queries and issue inspection.
 
-STRICT EXECUTION:
+Goal:
+- find the newest actionable Android Crashlytics issue
+- inspect the issue details and relevant evidence
+- make the smallest safe Android/Kotlin fix if a safe app-code fix is possible
 
-1. Always fetch the latest Android Crashlytics issue.
-2. Always fetch at least one representative event and stack trace for that issue.
-3. If any Android crash exists:
-   - you must attempt a fix
-   - even if partial, produce a minimal defensive fix
-4. If the root cause is unclear:
-   - add null checks, safeguards, default values, or try/catch where appropriate
-   - prevent the crash rather than waiting for a perfect fix
-
-RULES:
-
-- never exit without making a code change if crash data exists
-- prefer the smallest safe fix
-- avoid unrelated rewrites, refactors, dependency churn, or formatting-only changes
-- inspect only the relevant Android/Kotlin code paths for the fetched crash
-- preserve the existing MVVM, Jetpack Compose, Firebase auth/task architecture, and navigation structure
+Rules:
+- use Firebase MCP Crashlytics tools, not BigQuery
+- inspect only the narrowest relevant Android/Kotlin code paths
+- prefer null-safety, guard clauses, bounds checks, lifecycle safety, and defensive parsing
+- avoid speculative refactors, dependency churn, formatting-only changes, or unrelated cleanup
 - do not modify secrets, workflow auth, release signing, `google-services.json`, or Firebase configuration
-- leave verification to the workflow compile step
+- make no changes if no safe app-code fix is possible from the available evidence
 
-SKIP CONDITION:
+Process:
+1. Find the newest actionable Android Crashlytics issue.
+2. Inspect the issue, including stack trace and the most relevant event details available through Firebase MCP.
+3. Identify the narrowest relevant Kotlin/Android code path.
+4. Apply the smallest safe fix only if the evidence supports it.
+5. Leave the repository unchanged if there is no safe fix.
 
-- only skip making code changes if absolutely no Android Crashlytics issue or event data exists
-
-PROCESS:
-
-- before attempting any code change, first output a short status block covering:
-  - whether the Firebase MCP server is available
-  - whether Crashlytics MCP tools are available
-  - whether any Android Crashlytics issue was found
-  - whether any event and stack trace were found
-- use a plan-first approach before editing
-- fetch the latest Android Crashlytics issue through Firebase MCP
-- fetch at least one event and stack trace through Firebase MCP
-- identify the narrowest relevant code path
-- apply the smallest safe defensive fix that reduces or prevents the crash
-
-OUTPUT EXPECTATION:
-
-- always produce a diff if crash data exists so a draft PR can be created
-- keep the diff compact, production-friendly, and easy to review
+Output expectations:
+- summarize the selected Crashlytics issue
+- summarize the changed files, if any
+- summarize the safety rationale for the fix or for making no change
+- keep the diff compact and production-safe

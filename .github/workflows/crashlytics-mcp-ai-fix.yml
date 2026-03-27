@@ -38,6 +38,7 @@ jobs:
           create_credentials_file: true
 
       - name: Configure Firebase CLI credentials
+        shell: bash
         run: |
           echo "GOOGLE_APPLICATION_CREDENTIALS=${{ steps.auth.outputs.credentials_file_path }}" >> "$GITHUB_ENV"
           echo "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE=${{ steps.auth.outputs.credentials_file_path }}" >> "$GITHUB_ENV"
@@ -56,7 +57,7 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install Firebase CLI for MCP
+      - name: Install Firebase CLI
         run: npm install --global firebase-tools@latest
 
       - name: Set up Java
@@ -69,11 +70,13 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Prepare Codex MCP config
+        shell: bash
         run: |
           mkdir -p "$HOME/.codex"
           cp .codex/config.toml "$HOME/.codex/config.toml"
 
-      - name: Verify Firebase CLI project access
+      - name: Verify Firebase project access
+        shell: bash
         run: |
           firebase apps:list --project "$FIREBASE_PROJECT" --json --non-interactive > /dev/null
 
@@ -91,13 +94,22 @@ jobs:
           safety-strategy: drop-sudo
 
       - name: Print Codex output
+        shell: bash
         run: |
           if [ -f .tmp/codex-final-message.txt ]; then
             cat .tmp/codex-final-message.txt
           fi
 
-      - name: Clean CI runtime artifacts
+      - name: Print git status
+        run: git status --short
+
+      - name: Print git diff
+        run: git diff --stat && git diff
+
+      - name: Clean temporary artifacts before change detection
+        shell: bash
         run: |
+          rm -f .tmp/codex-final-message.txt
           rm -f .codex/*.json
           rm -f .codex/*.sqlite
           rm -rf .codex/logs*
@@ -108,25 +120,26 @@ jobs:
 
       - name: Detect code changes
         id: changes
+        shell: bash
         run: |
           if [ -n "$(git status --porcelain)" ]; then
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
-            echo "No safe changes were produced. No PR will be opened."
+            echo "No safe code changes were produced. No PR will be opened."
           fi
 
       - name: Write google-services.json
         if: steps.changes.outputs.has_changes == 'true'
+        shell: bash
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          mkdir -p app
           printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
 
-      - name: Verify Android compile
+      - name: Compile Android project
         if: steps.changes.outputs.has_changes == 'true'
-        run: ./gradlew :app:compileDebugKotlin
+        run: ./gradlew clean :app:compileDebugKotlin --no-build-cache
 
       - name: Create draft pull request
         if: steps.changes.outputs.has_changes == 'true'
@@ -134,25 +147,17 @@ jobs:
         with:
           token: ${{ secrets.GH_PAT }}
           branch-token: ${{ secrets.GH_PAT }}
-          add-paths: |
-            app/**
-            .github/**
-            docs/**
-            gradle/**
-            *.gradle.kts
-            settings.gradle.kts
-            gradle.properties
           branch: automation/crashlytics-mcp-ai-fix-${{ github.run_id }}-${{ github.run_attempt }}
           delete-branch: true
           commit-message: "chore: attempt Crashlytics MCP-guided fix"
           title: "chore: draft Crashlytics MCP-guided fix"
           body: |
             ## Summary
-            - attempted a minimal fix based on the newest actionable Android Crashlytics issue found through Firebase MCP
-            - verification included `./gradlew :app:compileDebugKotlin`
+            - attempted the smallest safe Android/Kotlin fix for the newest actionable Crashlytics issue found via Firebase MCP
+            - verification included `./gradlew clean :app:compileDebugKotlin --no-build-cache`
 
             ## Safety
             - this PR was created automatically as a draft
             - no auto-merge is configured
-            - if no actionable issue was found or Codex could not produce a safe fix, no PR would be opened
+            - if no safe app-code change was produced, no PR was opened
           draft: true

@@ -90,6 +90,14 @@ jobs:
       - name: Create temporary directory
         run: mkdir -p .tmp
 
+      - name: Show Codex config
+        shell: bash
+        run: |
+          echo "CODEX_HOME=$CODEX_HOME"
+          ls -la .codex || true
+          ls -la "$HOME/.codex" || true
+          sed -n '1,200p' "$HOME/.codex/config.toml" || true
+
       - name: Run Codex with Firebase MCP
         uses: openai/codex-action@v1
         with:
@@ -106,6 +114,8 @@ jobs:
           if [ -f .tmp/codex-final-message.txt ]; then
             cat .tmp/codex-final-message.txt
           fi
+          find .codex -maxdepth 2 -type f | sort || true
+          find "$HOME/.codex" -maxdepth 2 -type f | sort || true
 
       - name: Print git status
         run: git status --short

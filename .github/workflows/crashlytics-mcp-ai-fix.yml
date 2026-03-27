@@ -84,7 +84,13 @@ jobs:
       - name: Prepare Codex MCP config
         shell: bash
         run: |
+          mkdir -p "$CODEX_HOME"
           mkdir -p "$HOME/.codex"
+          cat > "$CODEX_HOME/config.toml" <<EOF
+          [mcp_servers.firebase]
+          command = "firebase"
+          args = ["mcp", "--dir", "${GITHUB_WORKSPACE}", "--only", "crashlytics,core"]
+          EOF
           cat > "$HOME/.codex/config.toml" <<EOF
           [mcp_servers.firebase]
           command = "firebase"

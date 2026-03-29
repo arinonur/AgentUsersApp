@@ -187,10 +187,15 @@ fun TaskHomeScreen(
                 item {
                     Button(
                         onClick = {
-                            CrashTestHelper.triggerComplexCrash(
-                                selectedTabIndex = selectedTabIndex,
-                                taskCount = uiState.inProgressTasks.size,
-                            )
+                            try {
+                                CrashTestHelper.triggerComplexCrash(
+                                    selectedTabIndex = selectedTabIndex,
+                                    taskCount = uiState.inProgressTasks.size,
+                                )
+                            } catch (e: Exception) {
+                                com.google.firebase.crashlytics.FirebaseCrashlytics
+                                    .getInstance().recordException(e)
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error,

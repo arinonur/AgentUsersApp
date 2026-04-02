@@ -16,8 +16,8 @@ object CrashTestHelper {
         // Simulates data coming from Firestore where assignees might be empty
         val assignees: List<String> = emptyList()
 
-        // BUG: accesses first element without checking if list is empty
-        val primaryAssignee = assignees[0]
+        // Fixed: safely access first element with null-safety guard
+        val primaryAssignee = assignees.firstOrNull() ?: "Unassigned"
         return primaryAssignee
     }
 

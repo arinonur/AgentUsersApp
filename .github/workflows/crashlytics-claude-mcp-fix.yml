@@ -48,75 +48,36 @@ jobs:
       - name: Ensure Gradle wrapper is executable
         run: chmod +x ./gradlew
 
-      - name: Fetch latest Crashlytics crashes
+      - name: Fetch latest Crashlytics crashes from BigQuery
         id: fetch_crashes
         shell: bash
+        env:
+          BQ_CRASH_TABLE: ${{ secrets.BQ_CRASH_TABLE }}
         run: |
           mkdir -p .tmp
-          ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          TABLE="${BQ_CRASH_TABLE:-${FIREBASE_PROJECT}.firebase_crashlytics.com_example_AgentUsersApp_ANDROID}"
+          echo "Querying BigQuery table: $TABLE"
 
-          # Get the Android app ID
-          APP_RESPONSE=$(curl --fail --silent --show-error \
-            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
-            "https://firebase.googleapis.com/v1beta1/projects/${FIREBASE_PROJECT}:searchApps?pageSize=10")
-          echo "Apps response: $APP_RESPONSE"
+          BQ_RESULT=$(bq query \
+            --project_id="${FIREBASE_PROJECT}" \
+            --use_legacy_sql=false \
+            --format=json \
+            "SELECT *
+            FROM \`${TABLE}\`
+            ORDER BY event_timestamp DESC
+            LIMIT 10" 2>&1)
 
-          ANDROID_APP_ID=$(echo "$APP_RESPONSE" | python3 -c "
-          import json, sys
-          data = json.load(sys.stdin)
-          for app in data.get('apps', []):
-              if app.get('platform') == 'ANDROID':
-                  # Extract just the app ID from the full name
-                  name = app.get('name', '')
-                  print(name.split('/')[-1])
-                  break
-          " 2>/dev/null || true)
+          BQ_EXIT=$?
+          echo "BigQuery exit code: $BQ_EXIT"
 
-          echo "Android App ID: $ANDROID_APP_ID"
-
-          if [ -z "$ANDROID_APP_ID" ]; then
-            echo "No Android app found in Firebase project"
-            echo "has_crashes=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # Fetch recent Crashlytics issues using the REST API
-          ISSUES_RESPONSE=$(curl --silent --show-error \
-            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
-            "https://firebasecrashlytics.googleapis.com/v1beta1/projects/${FIREBASE_PROJECT}/apps/${ANDROID_APP_ID}/issues?pageSize=5" 2>&1 || true)
-
-          echo "Crashlytics API response: $ISSUES_RESPONSE"
-
-          # If the Crashlytics REST API doesn't work, fall back to BigQuery
-          if echo "$ISSUES_RESPONSE" | grep -q '"issues"'; then
-            echo "$ISSUES_RESPONSE" > .tmp/crashes.json
+          if [ $BQ_EXIT -eq 0 ] && echo "$BQ_RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); assert len(d)>0" 2>/dev/null; then
+            echo "$BQ_RESULT" > .tmp/crashes.json
             echo "has_crashes=true" >> "$GITHUB_OUTPUT"
+            echo "Found $(echo "$BQ_RESULT" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null) crash events"
           else
-            echo "Crashlytics REST API not available, trying BigQuery..."
-            TABLE="${FIREBASE_PROJECT}.firebase_crashlytics.com_example_AgentUsersApp_ANDROID"
-            BQ_RESULT=$(bq query \
-              --project_id="${FIREBASE_PROJECT}" \
-              --use_legacy_sql=false \
-              --format=json \
-              "SELECT
-                event_timestamp,
-                issue_id,
-                exception_type,
-                exception_message,
-                blame_frame.file AS blame_file,
-                blame_frame.line AS blame_line,
-                blame_frame.symbol AS blame_symbol
-              FROM \`${TABLE}\`
-              ORDER BY event_timestamp DESC
-              LIMIT 5" 2>&1 || true)
-
-            if echo "$BQ_RESULT" | python3 -c "import json,sys; json.load(sys.stdin)" 2>/dev/null; then
-              echo "$BQ_RESULT" > .tmp/crashes.json
-              echo "has_crashes=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "BigQuery query failed: $BQ_RESULT"
-              echo "has_crashes=false" >> "$GITHUB_OUTPUT"
-            fi
+            echo "No crash data found or BigQuery query failed"
+            echo "$BQ_RESULT"
+            echo "has_crashes=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build Claude prompt with crash data

@@ -206,6 +206,21 @@ fun TaskHomeScreen(
                         Text("Trigger Crashlytics Test Crash")
                     }
                 }
+                item {
+                    Button(
+                        onClick = {
+                            // BUG: this will crash with IndexOutOfBoundsException
+                            CrashTestHelper.parseTaskAssignees("My Test Task")
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFF6B00),
+                            contentColor = Color.White,
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        Text("Test: Parse Task Assignees")
+                    }
+                }
             }
 
             items(uiState.taskGroups) { group ->

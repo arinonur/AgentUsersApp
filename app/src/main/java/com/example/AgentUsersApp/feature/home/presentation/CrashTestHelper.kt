@@ -3,6 +3,24 @@ package com.example.AgentUsersApp.feature.home.presentation
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 
 object CrashTestHelper {
+
+    /**
+     * Simulates a realistic crash: parsing task assignees from a
+     * server response where the assignee list can be empty.
+     */
+    fun parseTaskAssignees(taskTitle: String): String {
+        val crashlytics = FirebaseCrashlytics.getInstance()
+        crashlytics.log("Parsing assignees for task: $taskTitle")
+        crashlytics.setCustomKey("task_title", taskTitle)
+
+        // Simulates data coming from Firestore where assignees might be empty
+        val assignees: List<String> = emptyList()
+
+        // BUG: accesses first element without checking if list is empty
+        val primaryAssignee = assignees[0]
+        return primaryAssignee
+    }
+
     fun triggerComplexCrash(selectedTabIndex: Int, taskCount: Int) {
         val crashlytics = FirebaseCrashlytics.getInstance()
         crashlytics.log("Starting complex HomeScreen crash test")

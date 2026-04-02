@@ -1,4 +1,4 @@
-name: Crashlytics Claude Fix
+name: Crashlytics Claude MCP Fix
 
 on:
   workflow_dispatch:
@@ -11,14 +11,15 @@ permissions:
   pull-requests: write
 
 jobs:
-  crashlytics-claude-fix:
+  crashlytics-claude-mcp-fix:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:
-      group: crashlytics-claude-fix
+      group: crashlytics-claude-mcp-fix
       cancel-in-progress: false
     env:
       FIREBASE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
     steps:
       - name: Check out repository
@@ -39,6 +40,29 @@ jobs:
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
+      - name: Configure Firebase CLI credentials
+        shell: bash
+        run: |
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${{ steps.auth.outputs.credentials_file_path }}" >> "$GITHUB_ENV"
+          echo "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE=${{ steps.auth.outputs.credentials_file_path }}" >> "$GITHUB_ENV"
+          echo "GOOGLE_CLOUD_PROJECT=${FIREBASE_PROJECT}" >> "$GITHUB_ENV"
+          echo "GCLOUD_PROJECT=${FIREBASE_PROJECT}" >> "$GITHUB_ENV"
+          cat > .firebaserc <<EOF
+          {
+            "projects": {
+              "default": "${FIREBASE_PROJECT}"
+            }
+          }
+          EOF
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools@latest
+
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
@@ -48,93 +72,60 @@ jobs:
       - name: Ensure Gradle wrapper is executable
         run: chmod +x ./gradlew
 
-      - name: Fetch latest Crashlytics crashes from BigQuery
-        id: fetch_crashes
+      - name: Create MCP config for Claude Code
         shell: bash
-        env:
-          BQ_CRASH_TABLE: ${{ secrets.BQ_CRASH_TABLE }}
         run: |
           mkdir -p .tmp
-          TABLE="${BQ_CRASH_TABLE:-${FIREBASE_PROJECT}.firebase_crashlytics.com_example_AgentUsersApp_ANDROID}"
-          echo "Querying BigQuery table: $TABLE"
+          cat > .tmp/mcp-config.json <<EOF
+          {
+            "mcpServers": {
+              "firebase": {
+                "command": "bash",
+                "args": ["-lc", "firebase --token \"${FIREBASE_TOKEN}\" mcp --dir \"${GITHUB_WORKSPACE}\" --only crashlytics,core"],
+                "env": {
+                  "GOOGLE_APPLICATION_CREDENTIALS": "${{ steps.auth.outputs.credentials_file_path }}",
+                  "GOOGLE_CLOUD_PROJECT": "${FIREBASE_PROJECT}",
+                  "GCLOUD_PROJECT": "${FIREBASE_PROJECT}"
+                }
+              }
+            }
+          }
+          EOF
+          echo "MCP config contents:"
+          cat .tmp/mcp-config.json
 
-          BQ_RESULT=$(bq query \
-            --project_id="${FIREBASE_PROJECT}" \
-            --use_legacy_sql=false \
-            --format=json \
-            "SELECT *
-            FROM \`${TABLE}\`
-            ORDER BY event_timestamp DESC
-            LIMIT 10" 2>&1)
-
-          BQ_EXIT=$?
-          echo "BigQuery exit code: $BQ_EXIT"
-
-          if [ $BQ_EXIT -eq 0 ] && echo "$BQ_RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); assert len(d)>0" 2>/dev/null; then
-            echo "$BQ_RESULT" > .tmp/crashes.json
-            echo "has_crashes=true" >> "$GITHUB_OUTPUT"
-            echo "Found $(echo "$BQ_RESULT" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null) crash events"
-          else
-            echo "No crash data found or BigQuery query failed"
-            echo "$BQ_RESULT"
-            echo "has_crashes=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Build Claude prompt with crash data
-        if: steps.fetch_crashes.outputs.has_crashes == 'true'
+      - name: Verify Firebase project access
         shell: bash
         run: |
-          cat > .tmp/claude-prompt.md <<'PROMPT_START'
-          You have crash data from Firebase Crashlytics below. Your task:
+          ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            "https://firebase.googleapis.com/v1beta1/projects/${FIREBASE_PROJECT}:searchApps?pageSize=1" \
+            > .tmp/firebase-apps-check.json
+          cat .tmp/firebase-apps-check.json
 
-          1. Analyze the crash data to identify the most recent actionable crash
-          2. Read the relevant Kotlin/Android source files based on the stack trace
-          3. Apply the smallest safe fix that addresses the crash
-          4. Verify by running: ./gradlew :app:compileDebugKotlin
-
-          Fix guidelines:
-          - Prefer null-safety guards, bounds checks, lifecycle safety, and defensive parsing
-          - Preserve existing architecture, MVVM structure, and design patterns
-          - Do NOT modify secrets, workflow files, google-services.json, or Firebase config
-          - Do NOT run git commit or git push
-          - If no safe fix is possible, make no changes
-
-          Output: Start your final message with `PR title: <specific title>` then summarize.
-
-          Crash data:
-          ```json
-          PROMPT_START
-          cat .tmp/crashes.json >> .tmp/claude-prompt.md
-          cat >> .tmp/claude-prompt.md <<'PROMPT_END'
-          ```
-          PROMPT_END
-
-      - name: Run Claude Code
-        if: steps.fetch_crashes.outputs.has_crashes == 'true'
+      - name: Run Claude Code with Firebase MCP
         id: claude
         uses: anthropics/claude-code-base-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt_file: .tmp/claude-prompt.md
-          allowed_tools: "Read,Edit,Write,Glob,Grep,Bash(./gradlew:*),Bash(find:*),Bash(ls:*)"
-          max_turns: "30"
+          prompt_file: .github/prompts/crashlytics_claude_mcp_fix.md
+          mcp_config: .tmp/mcp-config.json
+          allowed_tools: "mcp__firebase__*,Read,Edit,Write,Bash(./gradlew:*),Bash(find:*),Bash(ls:*),Bash(cat:*),Bash(git diff:*),Bash(git status:*)"
+          max_turns: "25"
           model: "claude-sonnet-4-20250514"
 
       - name: Prepare pull request metadata
-        if: steps.fetch_crashes.outputs.has_crashes == 'true'
         id: pr_meta
         shell: bash
         run: |
-          PR_TITLE="fix: automated Crashlytics crash fix"
-          PR_BODY=""
+          PR_TITLE="chore: draft Crashlytics Claude-guided fix"
           EXEC_FILE="${{ steps.claude.outputs.execution_file }}"
           if [ -f "$EXEC_FILE" ]; then
-            python3 -c "
+            CANDIDATE="$(python3 -c "
           import json, sys
           data = json.load(open(sys.argv[1]))
           msgs = data.get('messages', data if isinstance(data, list) else [])
-          title = ''
-          body = ''
           for msg in reversed(msgs):
               if isinstance(msg, dict) and msg.get('role') == 'assistant':
                   content = msg.get('content', '')
@@ -144,35 +135,16 @@ jobs:
                       text = next((b['text'] for b in content if isinstance(b, dict) and b.get('type') == 'text'), '')
                   else:
                       continue
-                  lines = text.splitlines()
-                  for i, line in enumerate(lines):
+                  for line in text.splitlines():
                       if line.strip().startswith('PR title:'):
-                          title = line.strip().split('PR title:', 1)[1].strip()
-                          body = '\n'.join(lines[i+1:]).strip()
-                          break
-                  if title:
-                      break
-          with open('.tmp/pr_title.txt', 'w') as f:
-              f.write(title)
-          with open('.tmp/pr_body.txt', 'w') as f:
-              f.write(body)
-          " "$EXEC_FILE" 2>/dev/null || true
-            if [ -s .tmp/pr_title.txt ]; then
-              CANDIDATE="$(cat .tmp/pr_title.txt)"
-              if [ -n "$CANDIDATE" ]; then
-                PR_TITLE="$CANDIDATE"
-              fi
-            fi
-            if [ -s .tmp/pr_body.txt ]; then
-              PR_BODY="$(cat .tmp/pr_body.txt)"
+                          print(line.strip().split('PR title:', 1)[1].strip())
+                          sys.exit(0)
+          " "$EXEC_FILE" 2>/dev/null || true)"
+            if [ -n "$CANDIDATE" ]; then
+              PR_TITLE="$CANDIDATE"
             fi
           fi
           echo "title=$PR_TITLE" >> "$GITHUB_OUTPUT"
-          {
-            echo "body<<PREOF"
-            echo "$PR_BODY"
-            echo "PREOF"
-          } >> "$GITHUB_OUTPUT"
 
       - name: Print git status
         run: git status --short
@@ -219,19 +191,18 @@ jobs:
         with:
           token: ${{ secrets.GH_PAT }}
           branch-token: ${{ secrets.GH_PAT }}
-          branch: automation/crashlytics-claude-fix-${{ github.run_id }}-${{ github.run_attempt }}
+          branch: automation/crashlytics-claude-mcp-fix-${{ github.run_id }}-${{ github.run_attempt }}
           delete-branch: true
-          commit-message: ${{ steps.pr_meta.outputs.title }}
+          commit-message: "chore: Crashlytics Claude-guided fix"
           title: ${{ steps.pr_meta.outputs.title }}
           body: |
-            ## Claude Code Analysis
-
-            ${{ steps.pr_meta.outputs.body }}
-
-            ## Verification
-            - Compiled with `./gradlew clean :app:compileDebugKotlin --no-build-cache`
+            ## Summary
+            - Found the newest actionable Crashlytics issue via Firebase MCP
+            - Applied the smallest safe Android/Kotlin fix using Claude Code
+            - Verified with `./gradlew clean :app:compileDebugKotlin --no-build-cache`
 
             ## Safety
             - This PR was created automatically as a **draft**
             - No auto-merge is configured
+            - If no safe app-code change was produced, no PR was opened
           draft: true

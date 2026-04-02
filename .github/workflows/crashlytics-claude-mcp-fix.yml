@@ -158,6 +158,7 @@ jobs:
           rm -rf .tmp/
           rm -f .firebaserc
           rm -f gha-creds-*.json
+          rm -f output.txt
           rm -rf .claude/
           git checkout -- .codex/config.toml 2>/dev/null || true
 

@@ -120,15 +120,12 @@ jobs:
         shell: bash
         run: |
           PR_TITLE="chore: draft Crashlytics Claude-guided fix"
-          PR_BODY=""
           EXEC_FILE="${{ steps.claude.outputs.execution_file }}"
           if [ -f "$EXEC_FILE" ]; then
-            python3 -c "
+            CANDIDATE="$(python3 -c "
           import json, sys
           data = json.load(open(sys.argv[1]))
           msgs = data.get('messages', data if isinstance(data, list) else [])
-          title = ''
-          body = ''
           for msg in reversed(msgs):
               if isinstance(msg, dict) and msg.get('role') == 'assistant':
                   content = msg.get('content', '')
@@ -138,35 +135,16 @@ jobs:
                       text = next((b['text'] for b in content if isinstance(b, dict) and b.get('type') == 'text'), '')
                   else:
                       continue
-                  lines = text.splitlines()
-                  for i, line in enumerate(lines):
+                  for line in text.splitlines():
                       if line.strip().startswith('PR title:'):
-                          title = line.strip().split('PR title:', 1)[1].strip()
-                          body = '\n'.join(lines[i+1:]).strip()
-                          break
-                  if title:
-                      break
-          with open('.tmp/pr_title.txt', 'w') as f:
-              f.write(title)
-          with open('.tmp/pr_body.txt', 'w') as f:
-              f.write(body)
-          " "$EXEC_FILE" 2>/dev/null || true
-            if [ -s .tmp/pr_title.txt ]; then
-              CANDIDATE="$(cat .tmp/pr_title.txt)"
-              if [ -n "$CANDIDATE" ]; then
-                PR_TITLE="$CANDIDATE"
-              fi
-            fi
-            if [ -s .tmp/pr_body.txt ]; then
-              PR_BODY="$(cat .tmp/pr_body.txt)"
+                          print(line.strip().split('PR title:', 1)[1].strip())
+                          sys.exit(0)
+          " "$EXEC_FILE" 2>/dev/null || true)"
+            if [ -n "$CANDIDATE" ]; then
+              PR_TITLE="$CANDIDATE"
             fi
           fi
           echo "title=$PR_TITLE" >> "$GITHUB_OUTPUT"
-          {
-            echo "body<<PREOF"
-            echo "$PR_BODY"
-            echo "PREOF"
-          } >> "$GITHUB_OUTPUT"
 
       - name: Print git status
         run: git status --short
@@ -215,17 +193,16 @@ jobs:
           branch-token: ${{ secrets.GH_PAT }}
           branch: automation/crashlytics-claude-mcp-fix-${{ github.run_id }}-${{ github.run_attempt }}
           delete-branch: true
-          commit-message: ${{ steps.pr_meta.outputs.title }}
+          commit-message: "chore: Crashlytics Claude-guided fix"
           title: ${{ steps.pr_meta.outputs.title }}
           body: |
-            ## Claude Code Analysis
-
-            ${{ steps.pr_meta.outputs.body }}
-
-            ## Verification
-            - Compiled with `./gradlew clean :app:compileDebugKotlin --no-build-cache`
+            ## Summary
+            - Found the newest actionable Crashlytics issue via Firebase MCP
+            - Applied the smallest safe Android/Kotlin fix using Claude Code
+            - Verified with `./gradlew clean :app:compileDebugKotlin --no-build-cache`
 
             ## Safety
             - This PR was created automatically as a **draft**
             - No auto-merge is configured
+            - If no safe app-code change was produced, no PR was opened
           draft: true

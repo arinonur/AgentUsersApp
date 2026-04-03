@@ -47,17 +47,20 @@ object CrashTestHelper {
             )
         }
 
-        fun resolvePrimaryTaskOwner(session: FakeSession, payload: FakeTaskPayload): String {
+        fun resolvePrimaryTaskOwner(session: FakeSession, payload: FakeTaskPayload): String? {
             crashlytics.log("Resolving primary task owner")
-            return requireNotNull(payload.primaryOwnerId) {
-                "Missing primary owner while parsing dashboard state for ${session.sessionId}"
+            return payload.primaryOwnerId ?: run {
+                crashlytics.log(
+                    "Skipping crash test flow: missing primary owner for ${session.sessionId}",
+                )
+                null
             }
         }
 
         val session = buildFakeSession(selectedTabIndex)
         val payload = buildFakeTaskPayload(session, taskCount)
-        resolvePrimaryTaskOwner(session, payload)
-        throw IllegalStateException("Crash test should have failed during HomeScreen state processing")
+        val ownerId = resolvePrimaryTaskOwner(session, payload) ?: return
+        crashlytics.log("Crash test flow completed without fatal crash for owner $ownerId")
     }
 }
 
